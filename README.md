@@ -1,7 +1,7 @@
 # tcpsnob
 
 A thin abstraction on top of Unix sockets that simplifies the creation 
-and use of non-blocking TCP sockets. Should work for IPv4 and IPv6.
+and use of non-blocking TCP sockets. Works for IPv4 and IPv6.
 
 ##  Interface
 
