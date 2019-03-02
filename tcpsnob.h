@@ -1,6 +1,8 @@
 #ifndef TCPSNOB_H
 #define TCPSNOB_H
 
+#include <sys/socket.h>
+
 #define TCPSNOB_IPV4 AF_INET
 #define TCPSNOB_IPV6 AF_INET6
 
