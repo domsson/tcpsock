@@ -7,6 +7,9 @@
 #include <netdb.h>      // getaddrinfo()
 #include "tcpsnob.h"
 
+#define TCPSNOB_IPV4 AF_INET
+#define TCPSNOB_IPV6 AF_INET6
+
 /*
  * Creates a non-blocking TCP socket, either IPv4 or IPv6, depending on ip_type.
  * If the given ip_type is neither AF_INET nor AF_INET6, AF_INET (IPv4) is used.
