@@ -1,5 +1,5 @@
-#ifndef TCPSNOB_H
-#define TCPSNOB_H
+#ifndef TCPSOCK_H
+#define TCPSOCK_H
 
 #include <stdlib.h>     // NULL, EXIT_FAILURE, EXIT_SUCCESS
 #include <unistd.h>     // close(), fcntl()
@@ -13,8 +13,8 @@
 // API
 //
 
-#define TCPSNOB_IPV4 AF_INET
-#define TCPSNOB_IPV6 AF_INET6
+#define TCPSOCK_IPV4 AF_INET
+#define TCPSOCK_IPV6 AF_INET6
 
 /*
  * Creates a non-blocking TCP socket, either IPv4 or IPv6, depending on ip_type.
@@ -23,7 +23,7 @@
  * In case of error, either we failed to create a socket via socket(), or a call
  * to fcntl(), in an attempt to get or set the file descriptor flags, failed.
  */
-int tcpsnob_create(int ip_type);
+int tcpsock_create(int ip_type);
 
 /*
  * Initiates a connection for the TCP socket described by sockfd.
@@ -33,7 +33,7 @@ int tcpsnob_create(int ip_type);
  * Returns -1 if the host/port could not be translated into an IP address or if 
  * the connection could not be established for some other reason.
  */
-int tcpsnob_connect(int sockfd, int ip_type, const char *host, const char *port);
+int tcpsock_connect(int sockfd, int ip_type, const char *host, const char *port);
 
 /*
  * Queries getsockopt() for the socket status in an attempt to figure out
@@ -47,21 +47,7 @@ int tcpsnob_connect(int sockfd, int ip_type, const char *host, const char *port)
  * Returns -1 if the socket reported an error or the socket status could not
  * be queried, both indicating that the socket is most likely not connected.
  */
-int tcpsnob_status(int sockfd);
-
-/*
- * Queries getsockopt() for the socket status in an attempt to figure out
- * whether the socket is connected. Note that this should not be used unless
- * there is a good reason - it is always best to simply try and send on the
- * socket in question to see if it is connected. If you want to check if a 
- * previous connection attempt succeeded, you should simply use select(), 
- * poll() or epoll() to wait on the socket and see if it becomes ready for 
- * writing (sending); this indicates the socket connection is established.
- * Returns 0 if the socket is healthy and most likely connected.
- * Returns -1 if the socket reported an error or the socket status could not
- * be queried, both indicating that the socket is most likely not connected.
- */
-int tcpsnob_status(int sockfd);
+int tcpsock_status(int sockfd);
 
 /*
  * Sends the given data using the given socket.
@@ -69,7 +55,7 @@ int tcpsnob_status(int sockfd);
  * On error, -1 is returned and errno is set appropriately.
  * See the man page of send() for more details.
  */
-int tcpsnob_send(int sockfd, const char *msg, size_t len);
+int tcpsock_send(int sockfd, const char *msg, size_t len);
 
 /*
  * Reads the buffer of the given socket using recv().
@@ -79,22 +65,22 @@ int tcpsnob_send(int sockfd, const char *msg, size_t len);
  * or if the requested number of bytes to receive from the socket was 0.
  * See the man page of recv() for more details.
  */
-int tcpsnob_receive(int sockfd, char *buf, size_t len);
+int tcpsock_receive(int sockfd, char *buf, size_t len);
 
 /*
  * Closes the given socket.
  * Returns 0 on success, -1 on error (see errno).
  * See the man page of close() for more details.
  */
-int tcpsnob_close(int sockfd);
+int tcpsock_close(int sockfd);
 
 //
 // IMPLEMENTATION
 //
 
-#ifdef TCPSNOB_IMPLEMENTATION
+#ifdef TCPSOCK_IMPLEMENTATION
 
-int tcpsnob_create(int ip_type)
+int tcpsock_create(int ip_type)
 {
 	// If ip_type was neither IPv4 nor IPv6, we fall back to IPv4
 	if ((ip_type != AF_INET) && (ip_type != AF_INET6))
@@ -112,25 +98,11 @@ int tcpsnob_create(int ip_type)
 		return -1;
 	}
 
-	// Get the current file descriptor flags
-	int get = fcntl(sfd, F_GETFL);
-	if (get == -1)
-	{
-		return -1;
-	}
-
-	// Add O_NONBLOCK to the file descriptor flags
-	int set = fcntl(sfd, F_SETFL, get | O_NONBLOCK);
-	if (set == -1)
-	{
-		return -1;
-	}
-
 	// All done, return socket file descriptor
 	return sfd;
 }
 
-int tcpsnob_connect(int sockfd, int ip_type, const char *host, const char *port)
+int tcpsock_connect(int sockfd, int ip_type, const char *host, const char *port)
 {
 	// If ip_type was neither IPv4 nor IPv6, we fall back to IPv4
 	if ((ip_type != AF_INET) && (ip_type != AF_INET6))
@@ -161,23 +133,18 @@ int tcpsnob_connect(int sockfd, int ip_type, const char *host, const char *port)
 	int con = connect(sockfd, info->ai_addr, info->ai_addrlen);
 	freeaddrinfo(info);
 
-	// connect() should return -1 for non-blocking sockets
+	// connect() should return 0 for success on blocking sockets
 	if (con == -1)
 	{
-		// Connection in progress (that's what we expect!)
-		if (errno == EINPROGRESS || errno == EALREADY)
-		{
-			return 0;
-		}
-		// Some other error occured (errno will be set)
+		// Some error occured (errno will be set)
 		return -1;
 	}
 
-	// connect() returned 0, so we're connected (erm... how?)
+	// connect() returned 0, so we're connected
 	return 0;
 }
 
-int tcpsnob_status(int sockfd)
+int tcpsock_status(int sockfd)
 {
 	int err = 0;
 	socklen_t len = sizeof(err);
@@ -198,20 +165,20 @@ int tcpsnob_status(int sockfd)
 	return 0;
 }
 
-int tcpsnob_send(int sockfd, const char *msg, size_t len)
+int tcpsock_send(int sockfd, const char *msg, size_t len)
 {
 	return send(sockfd, msg, len, 0);
 }
 
-int tcpsnob_receive(int sockfd, char *buf, size_t len)
+int tcpsock_receive(int sockfd, char *buf, size_t len)
 {
 	return recv(sockfd, buf, len, 0);
 }
 
-int tcpsnob_close(int sockfd)
+int tcpsock_close(int sockfd)
 {
 	return close(sockfd);
 }
 
-#endif /* TCPSNOB_IMPLEMENTATION */
-#endif /* TCPSNOB_H */
+#endif /* TCPSOCK_IMPLEMENTATION */
+#endif /* TCPSOCK_H */
