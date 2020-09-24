@@ -16,14 +16,25 @@
 #define TCPSOCK_IPV4 AF_INET
 #define TCPSOCK_IPV6 AF_INET6
 
+#define TCPSOCK_NONBLOCK 0
+#define TCPSOCK_BLOCK    1
+
 /*
- * Creates a non-blocking TCP socket, either IPv4 or IPv6, depending on ip_type.
+ * Creates a TCP socket, either IPv4 or IPv6, depending on ip_type.
  * If the given ip_type is neither AF_INET nor AF_INET6, AF_INET (IPv4) is used.
+ * If block is 0, the socket will be set to non-blocking, otherwise to blocking.
  * Returns the socket's file descriptor on success or -1 on error. Check errno.
  * In case of error, either we failed to create a socket via socket(), or a call
  * to fcntl(), in an attempt to get or set the file descriptor flags, failed.
  */
-int tcpsock_create(int ip_type);
+int tcpsock_create(int ip_type, int block);
+
+/*
+ * Checks if the given socket is blocking. Returns 0 for non-blocking sockets, 
+ * 1 for blocking sockets. If aquiring the socket's blocking status failed, -1 
+ * is returned and errno will be set accordingly.
+ */
+int tcpsock_blocking(int sockfd);
 
 /*
  * Initiates a connection for the TCP socket described by sockfd.
@@ -80,7 +91,7 @@ int tcpsock_close(int sockfd);
 
 #ifdef TCPSOCK_IMPLEMENTATION
 
-int tcpsock_create(int ip_type)
+int tcpsock_create(int ip_type, int block)
 {
 	// If ip_type was neither IPv4 nor IPv6, we fall back to IPv4
 	if ((ip_type != AF_INET) && (ip_type != AF_INET6))
@@ -98,12 +109,52 @@ int tcpsock_create(int ip_type)
 		return -1;
 	}
 
+	// Nonblocking, we're done
+	if (block == 0)
+	{
+		// All done, return socket file descriptor
+		return sfd;
+	}
+
+	// Get the current file descriptor flags
+	int get = fcntl(sfd, F_GETFL);
+	if (get == -1)
+	{
+		return -1;
+	}
+
+	// Add O_NONBLOCK to the file descriptor flags
+	int set = fcntl(sfd, F_SETFL, get | O_NONBLOCK);
+	if (set == -1)
+	{
+		return -1;
+	}
+
 	// All done, return socket file descriptor
 	return sfd;
 }
 
+int tcpsock_blocking(int sockfd)
+{
+	int flags = fcntl(sockfd, F_GETFL);
+	if (flags == -1)
+	{
+		return -1;
+	}
+
+	return (flags & O_NONBLOCK) != O_NONBLOCK;
+}
+
 int tcpsock_connect(int sockfd, int ip_type, const char *host, const char *port)
 {
+	// Figure out if the socket is blocking
+	int block = tcpsock_blocking(sockfd);
+	if (block == -1)
+	{
+		// Couldn't figure out if socket is blocking or non-blocking
+		return -1;
+	}
+
 	// If ip_type was neither IPv4 nor IPv6, we fall back to IPv4
 	if ((ip_type != AF_INET) && (ip_type != AF_INET6))
 	{
@@ -133,10 +184,21 @@ int tcpsock_connect(int sockfd, int ip_type, const char *host, const char *port)
 	int con = connect(sockfd, info->ai_addr, info->ai_addrlen);
 	freeaddrinfo(info);
 
-	// connect() should return 0 for success on blocking sockets
+	// connect() should return 0 for success on blocking sockets, -1 for non-blocking sockets
 	if (con == -1)
 	{
-		// Some error occured (errno will be set)
+		if (block)
+		{
+			// Some error occured (errno will be set)
+			return -1;
+		}
+
+		// Connection in progress (that's what we expect!)
+		if (errno == EINPROGRESS || errno == EALREADY)
+		{
+			return 0;
+		}
+		// Some other error occured (errno will be set)
 		return -1;
 	}
 

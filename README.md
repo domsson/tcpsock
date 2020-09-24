@@ -1,8 +1,8 @@
 # tcpsock
 
 tcpsock is a thin abstraction on top of Unix sockets that simplifies the creation 
-and use of blocking TCP sockets, both IPv4 and IPv6. It's a single header file,
-making it easy to include it in your project. 
+and use of TCP sockets, both blocking and non-blocking, as well as IPv4 and IPv6. 
+It's a single header file, making it easy to include it in your project. 
 
 To get the implementation, define `TCPSOCK_IMPLEMENTATION` before including `tcpsock.h`.
 
@@ -11,16 +11,22 @@ To get the implementation, define `TCPSOCK_IMPLEMENTATION` before including `tcp
 
 ##  Interface
 
-### `int tcpsock_create(int ip_type)`
+### `int tcpsock_create(int ip_type, int block)`
 
-Returns a file descriptor for a non-blocking TCP socket or -1 on error.
+Returns a file descriptor for a TCP socket or -1 on error.
 `ip_type` should be either `TCPSOCK_IPV4` or `TCPSOCK_IPV6`.
+`block` should be `TCPSOCK_NONBLOCK` or `TCPSOCK_BLOCK`.
 
 ### `int tcpsock_connect(int sockfd, int ip_type, const char *host, const char *port)`
 
 Connects the socket `sockfd` to `host` on `port`. `ip_type` should be 
 the same as used for the call to `tcpsock_create()`. Returns 0 if the 
 connection has been established, otherwise -1.
+
+### `int tcpsock_blocking(int sockfd)`
+
+Checks if the given socket is blocking. Returns 1 for blocking, 0 for 
+non-blocking sockets, -1 if the socket's blocking status couldn't be aquired.
 
 ### `int tcpsock_status(int sockfd)`
 
